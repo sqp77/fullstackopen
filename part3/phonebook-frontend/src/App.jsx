@@ -23,6 +23,9 @@ const App = () => {
     setTimeout(() => setMessage(null), 5000)
   }
 
+  const errorText = (error, fallback) =>
+    (error.response && error.response.data && error.response.data.error) || fallback
+
   const handleNameChange = (event) => setNewName(event.target.value)
   const handleNumberChange = (event) => setNewNumber(event.target.value)
   const handleFilterChange = (event) => setFilter(event.target.value)
@@ -42,18 +45,20 @@ const App = () => {
       )
       if (!ok) return
 
-      const changedPerson = { ...existing, number: newNumber }
-
       personService
-        .update(existing.id, changedPerson)
+        .update(existing.id, { ...existing, number: newNumber })
         .then(returnedPerson => {
           setPersons(persons.map(p => (p.id === existing.id ? returnedPerson : p)))
           resetForm()
           notify(`Changed number of ${returnedPerson.name}`)
         })
-        .catch(() => {
-          notify(`Information of ${existing.name} has already been removed from server`, 'error')
-          setPersons(persons.filter(p => p.id !== existing.id))
+        .catch(error => {
+          if (error.response && error.response.status === 404) {
+            notify(`Information of ${existing.name} has already been removed from server`, 'error')
+            setPersons(persons.filter(p => p.id !== existing.id))
+          } else {
+            notify(errorText(error, 'Updating failed'), 'error')
+          }
         })
       return
     }
@@ -65,6 +70,7 @@ const App = () => {
         resetForm()
         notify(`Added ${returnedPerson.name}`)
       })
+      .catch(error => notify(errorText(error, 'Adding failed'), 'error'))
   }
 
   const deletePerson = (person) => {
@@ -72,9 +78,7 @@ const App = () => {
 
     personService
       .remove(person.id)
-      .then(() => {
-        setPersons(persons.filter(p => p.id !== person.id))
-      })
+      .then(() => setPersons(persons.filter(p => p.id !== person.id)))
       .catch(() => {
         notify(`Information of ${person.name} has already been removed from server`, 'error')
         setPersons(persons.filter(p => p.id !== person.id))
@@ -90,7 +94,6 @@ const App = () => {
       <h2>Phonebook</h2>
       <Notification message={message} />
       <Filter value={filter} onChange={handleFilterChange} />
-
       <h3>Add a new</h3>
       <PersonForm
         onSubmit={addPerson}
@@ -99,7 +102,6 @@ const App = () => {
         newNumber={newNumber}
         onNumberChange={handleNumberChange}
       />
-
       <h3>Numbers</h3>
       <Persons persons={personsToShow} onDelete={deletePerson} />
     </div>
